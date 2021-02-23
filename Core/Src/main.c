@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,6 +45,7 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+uint8_t data_rec[6];    // global buffer SPI rx tmp debug
 
 /* USER CODE END PV */
 
@@ -60,6 +61,36 @@ static void MX_SPI1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+// copy n paste code to test ...
+// https://controllerstech.com/how-to-use-spi-with-stm32/
+
+void adxl_write (uint8_t address, uint8_t value)
+{
+    uint8_t data[2];
+    data[0] = address|0x40;  // multibyte write enabled
+    data[1] = value;
+    HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_RESET); // pull the cs pin low to enable the slave
+    HAL_SPI_Transmit (&hspi1, data, 2, 100);  // transmit the address and data
+    HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_SET); // pull the cs pin high to disable the slave
+}
+
+void adxl_read (uint8_t address)
+{
+    address |= 0x80;  // read operation
+    address |= 0x40;  // multibyte read
+    HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);  // pull the cs pin low to enable the slave
+    HAL_SPI_Transmit (&hspi1, &address, 1, 100);  // send the address from where you want to read data
+    HAL_SPI_Receive (&hspi1, data_rec, 6, 100);  // read 6 BYTES of data
+    HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_SET);  // pull the cs pin high to disable the slave
+}
+
+void adxl_init (void)
+{
+    adxl_write (0x31, 0x01);  // data_format range= +- 4g
+    adxl_write (0x2d, 0x00);  // reset all bits
+    adxl_write (0x2d, 0x08);  // power_cntl measure and wake up 8hz
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -69,6 +100,8 @@ static void MX_SPI1_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+
+      uint8_t uart_out[128] = {'\0'};
 
   /* USER CODE END 1 */
 
@@ -103,6 +136,19 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+      static int n = 0;
+
+      sprintf(data_rec, "12345"); // tmp .. junk data for clocking in the response from peripheral
+      adxl_read (0x32);
+
+      sprintf(uart_out,
+              "%d: %02X %02X %02X %02X %02X %02X.\r\n",
+              n++,
+              data_rec[0], data_rec[1], data_rec[2], data_rec[3], data_rec[4], data_rec[5] );
+
+      HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
+      HAL_Delay (200);   // wait for 200 ms
+
   }
   /* USER CODE END 3 */
 }
