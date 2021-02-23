@@ -91,6 +91,8 @@ void adxl_init (void)
     adxl_write (0x2d, 0x08);  // power_cntl measure and wake up 8hz
 }
 
+#define SPI_CTRLR
+
 /* USER CODE END 0 */
 
 /**
@@ -138,6 +140,8 @@ int main(void)
     /* USER CODE BEGIN 3 */
       static int n = 0;
 
+#ifdef SPI_CTRLR
+
       sprintf(data_rec, "12345"); // tmp .. junk data for clocking in the response from peripheral
       adxl_read (0x32);
 
@@ -148,7 +152,16 @@ int main(void)
 
       HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
       HAL_Delay (200);   // wait for 200 ms
+#else
+      uint8_t input, output;
+      HAL_SPI_TransmitReceive(&hspi1, (uint8_t *)&output, (uint8_t *)&input, sizeof(input), 100 /* HAL_MAX_DELAY */);
+      output = input;
 
+      sprintf(uart_out, "%d: %02X.\r\n", n++, output );
+
+      HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
+      HAL_Delay (100);   // wait for 200 ms
+#endif
   }
   /* USER CODE END 3 */
 }
