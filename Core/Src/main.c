@@ -47,6 +47,10 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 uint8_t data_rec[6];    // global buffer SPI rx tmp debug
 
+// Global flags
+volatile uint8_t spi_xmit_flag = 0;
+volatile uint8_t spi_recv_flag = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -91,7 +95,7 @@ void adxl_init (void)
     adxl_write (0x2d, 0x08);  // power_cntl measure and wake up 8hz
 }
 
-#define SPI_CTRLR
+//#define SPI_CTRLR
 
 /* USER CODE END 0 */
 
@@ -102,8 +106,10 @@ void adxl_init (void)
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
-      uint8_t uart_out[128] = {'\0'};
+    uint8_t uart_out[128] = { '\0' };
+    uint8_t spi_out[16] = "BLAH";
+    char spi_buf[16];
+    int line_ct = 0;
 
   /* USER CODE END 1 */
 
@@ -129,6 +135,10 @@ int main(void)
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 
+#ifdef SPI_CTRLR
+    // CS pin should default high
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+#endif
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -139,6 +149,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
       static int n = 0;
+      uint8_t address = 'A'; // test data
 
 #ifdef SPI_CTRLR
 
@@ -153,14 +164,23 @@ int main(void)
       HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
       HAL_Delay (200);   // wait for 200 ms
 #else
-      uint8_t input, output;
-      HAL_SPI_TransmitReceive(&hspi1, (uint8_t *)&output, (uint8_t *)&input, sizeof(input), 100 /* HAL_MAX_DELAY */);
-      output = input;
 
-      sprintf(uart_out, "%d: %02X.\r\n", n++, output );
+      spi_buf[0] = 'R';
+      spi_buf[1] = 'X';
+#if 1
+      HAL_SPI_Receive(&hspi1, (uint8_t*) spi_buf, 4, 500);
+//      HAL_SPI_TransmitReceive(&hspi1, (uint8_t *) spi_out,  (uint8_t *) spi_buf, 4, 500); // no
+#else
+      HAL_SPI_Receive(&hspi1, (uint8_t*) &spi_buf[0], 1, 500);
+// doesn't seem to be any point ... how to transmit seomthing specific?
+      HAL_SPI_Receive(&hspi1, (uint8_t*) &spi_buf[1], 1, 50); // if first one is indeed timed-out, second should't hang around either
+//        HAL_SPI_TransmitReceive(&hspi1, (uint8_t*) spi_out,  (uint8_t*) spi_buf, 1, 500); // no
+#endif
+// these should be coming in slow enough to print at this time (4/sec)
+          sprintf(uart_out, ">%d: %02X %02X %02X %02X.\r\n", line_ct++,
+                		spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3]   );
+          HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
 
-      HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
-      HAL_Delay (100);   // wait for 200 ms
 #endif
   }
   /* USER CODE END 3 */
@@ -228,13 +248,21 @@ static void MX_SPI1_Init(void)
   /* USER CODE END SPI1_Init 1 */
   /* SPI1 parameter configuration*/
   hspi1.Instance = SPI1;
+#ifdef SPI_CTRLR
   hspi1.Init.Mode = SPI_MODE_MASTER;
+#else
+  hspi1.Init.Mode = SPI_MODE_SLAVE;
+#endif
   hspi1.Init.Direction = SPI_DIRECTION_2LINES;
   hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+#ifdef SPI_CTRLR
   hspi1.Init.NSS = SPI_NSS_SOFT;
   hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+#else
+  hspi1.Init.NSS = SPI_NSS_HARD_INPUT;
+#endif
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -301,8 +329,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
+#ifdef SPI_CTRLR
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+#endif
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -310,17 +340,38 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
+#ifdef SPI_CTRLR
   /*Configure GPIO pin : PB6 */
   GPIO_InitStruct.Pin = GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+#endif
 
 }
 
 /* USER CODE BEGIN 4 */
 
+// This is called when SPI transmit is done
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) 
+{
+#ifdef SPI_CTRLR
+    // Set CS pin to high and raise flag
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+#endif
+    spi_xmit_flag = 1;
+}
+
+// This is called when SPI receive is done
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) 
+{
+#ifdef SPI_CTRLR
+    // Set CS pin to high and raise flag
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+#endif
+    spi_recv_flag = 1;
+}
 /* USER CODE END 4 */
 
 /**
