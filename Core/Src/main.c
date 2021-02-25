@@ -150,6 +150,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
       static int n = 0;
       uint8_t address = 'A'; // test data
+      spi_out[0] = ' '; // test data
 
 #ifdef SPI_CTRLR
 
@@ -167,18 +168,15 @@ int main(void)
 
       spi_buf[0] = 'R';
       spi_buf[1] = 'X';
-#if 1
-      HAL_SPI_Receive(&hspi1, (uint8_t*) spi_buf, 4, 500);
-//      HAL_SPI_TransmitReceive(&hspi1, (uint8_t *) spi_out,  (uint8_t *) spi_buf, 4, 500); // no
-#else
-      HAL_SPI_Receive(&hspi1, (uint8_t*) &spi_buf[0], 1, 500);
-// doesn't seem to be any point ... how to transmit seomthing specific?
-      HAL_SPI_Receive(&hspi1, (uint8_t*) &spi_buf[1], 1, 50); // if first one is indeed timed-out, second should't hang around either
-//        HAL_SPI_TransmitReceive(&hspi1, (uint8_t*) spi_out,  (uint8_t*) spi_buf, 1, 500); // no
-#endif
+
+      spi_out[0] = 'A'; spi_out[1] = 'B'; spi_out[2] = 'C';
+      spi_out[3] = (spi_out[3] < 126 ) ? spi_out[3] + 1 : ' ';
+
+      HAL_SPI_TransmitReceive(&hspi1, (uint8_t *) spi_out,  (uint8_t *) spi_buf, 4, HAL_MAX_DELAY);
+
 // these should be coming in slow enough to print at this time (4/sec)
           sprintf(uart_out, ">%d: %02X %02X %02X %02X.\r\n", line_ct++,
-                		spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3]   );
+                spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3]   );
           HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
 
 #endif
