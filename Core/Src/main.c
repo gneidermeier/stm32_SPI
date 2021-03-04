@@ -45,7 +45,6 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint8_t data_rec[6];    // global buffer SPI rx tmp debug
 
 // Global flags
 volatile uint8_t spi_xmit_flag = 0;
@@ -68,7 +67,7 @@ static void MX_SPI1_Init(void);
 // copy n paste code to test ...
 // https://controllerstech.com/how-to-use-spi-with-stm32/
 
-void adxl_write (uint8_t address, uint8_t value)
+void mcp8_write (uint8_t address, uint8_t value)
 {
     uint8_t data[2];
     data[0] = address|0x40;  // multibyte write enabled
@@ -78,24 +77,24 @@ void adxl_write (uint8_t address, uint8_t value)
     HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_SET); // pull the cs pin high to disable the slave
 }
 
-void adxl_read (uint8_t address)
+void mcp8_read(uint8_t address, uint8_t nbr, uint8_t *bufr)
 {
     address |= 0x80;  // read operation
     address |= 0x40;  // multibyte read
     HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);  // pull the cs pin low to enable the slave
     HAL_SPI_Transmit (&hspi1, &address, 1, 100);  // send the address from where you want to read data
-    HAL_SPI_Receive (&hspi1, data_rec, 6, 100);  // read 6 BYTES of data
+    HAL_SPI_Receive (&hspi1, bufr, nbr, 100);  // read 6 BYTES of data
     HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_SET);  // pull the cs pin high to disable the slave
 }
 
-void adxl_init (void)
+void mcp8_init (void)
 {
     adxl_write (0x31, 0x01);  // data_format range= +- 4g
     adxl_write (0x2d, 0x00);  // reset all bits
     adxl_write (0x2d, 0x08);  // power_cntl measure and wake up 8hz
 }
 
-//#define SPI_CTRLR
+#define SPI_CTRLR
 
 /* USER CODE END 0 */
 
@@ -153,16 +152,16 @@ int main(void)
       spi_out[0] = ' '; // test data
 
 #ifdef SPI_CTRLR
-
-      sprintf(data_rec, "12345"); // tmp .. junk data for clocking in the response from peripheral
-      adxl_read (0x32);
+      sprintf(spi_buf, "12345"); // junk data for checking if response from peripheral
+      mcp8_read(0x32, 4, spi_buf);
 
       sprintf(uart_out,
               "%d: %02X %02X %02X %02X %02X %02X.\r\n",
               n++,
-              data_rec[0], data_rec[1], data_rec[2], data_rec[3], data_rec[4], data_rec[5] );
+              spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3], spi_buf[4], spi_buf[5] );
 
       HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
+
       HAL_Delay (200);   // wait for 200 ms
 #else
 
@@ -246,21 +245,13 @@ static void MX_SPI1_Init(void)
   /* USER CODE END SPI1_Init 1 */
   /* SPI1 parameter configuration*/
   hspi1.Instance = SPI1;
-#ifdef SPI_CTRLR
   hspi1.Init.Mode = SPI_MODE_MASTER;
-#else
-  hspi1.Init.Mode = SPI_MODE_SLAVE;
-#endif
   hspi1.Init.Direction = SPI_DIRECTION_2LINES;
   hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-#ifdef SPI_CTRLR
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
-#else
-  hspi1.Init.NSS = SPI_NSS_HARD_INPUT;
-#endif
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -327,10 +318,8 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-#ifdef SPI_CTRLR
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-#endif
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -338,14 +327,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-#ifdef SPI_CTRLR
   /*Configure GPIO pin : PB6 */
   GPIO_InitStruct.Pin = GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-#endif
 
 }
 
