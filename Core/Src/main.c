@@ -87,12 +87,6 @@ void mcp8_read(uint8_t address, uint8_t nbr, uint8_t *bufr)
     HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_SET);  // pull the cs pin high to disable the slave
 }
 
-void mcp8_init (void)
-{
-    adxl_write (0x31, 0x01);  // data_format range= +- 4g
-    adxl_write (0x2d, 0x00);  // reset all bits
-    adxl_write (0x2d, 0x08);  // power_cntl measure and wake up 8hz
-}
 
 #define SPI_CTRLR
 
@@ -148,7 +142,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
       static int n = 0;
-      uint8_t address = 'A'; // test data
       spi_out[0] = ' '; // test data
 
 #ifdef SPI_CTRLR
@@ -164,17 +157,16 @@ int main(void)
 
       HAL_Delay (200);   // wait for 200 ms
 #else
+      sprintf((char *)spi_buf, "RX"); // junk data
+      sprintf((char *)spi_out, "ABCDE"); // junk data
 
-      spi_buf[0] = 'R';
-      spi_buf[1] = 'X';
-
-      spi_out[0] = 'A'; spi_out[1] = 'B'; spi_out[2] = 'C';
-      spi_out[3] = (spi_out[3] < 126 ) ? spi_out[3] + 1 : ' ';
+      n = (n >= 0x30 && n < 126) ? n+1 : 0x30;
+      spi_out[3] = n;
 
       HAL_SPI_TransmitReceive(&hspi1, (uint8_t *) spi_out,  (uint8_t *) spi_buf, 4, HAL_MAX_DELAY);
 
 // these should be coming in slow enough to print at this time (4/sec)
-          sprintf(uart_out, ">%d: %02X %02X %02X %02X.\r\n", line_ct++,
+          sprintf((char *)uart_out, ">%d: %02X %02X %02X %02X.\r\n", line_ct++,
                 spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3]   );
           HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
 
