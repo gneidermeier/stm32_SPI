@@ -83,7 +83,7 @@ void mcp8_read(uint8_t address, uint8_t nbr, uint8_t *bufr)
     address |= 0x40;  // multibyte read
     HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);  // pull the cs pin low to enable the slave
     HAL_SPI_Transmit (&hspi1, &address, 1, 100);  // send the address from where you want to read data
-    HAL_SPI_Receive (&hspi1, bufr, nbr, 100);  // read 6 BYTES of data
+    HAL_SPI_Receive (&hspi1, bufr, nbr, 100);  // read n BYTES of data
     HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_SET);  // pull the cs pin high to disable the slave
 }
 
@@ -99,10 +99,9 @@ void mcp8_read(uint8_t address, uint8_t nbr, uint8_t *bufr)
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-    uint8_t uart_out[128] = { '\0' };
+    char uart_out[128] = { '\0' };
     uint8_t spi_out[16] = "BLAH";
     char spi_buf[16];
-    int line_ct = 0;
 
   /* USER CODE END 1 */
 
@@ -142,10 +141,8 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
       static int n = 0;
-      spi_out[0] = ' '; // test data
-
 #ifdef SPI_CTRLR
-      sprintf(spi_buf, "12345"); // junk data for checking if response from peripheral
+      sprintf(spi_buf, "abcdefghijklmno"); // junk data for checking if response from peripheral
       mcp8_read(0x32, 4, spi_buf);
 
       sprintf(uart_out,
@@ -155,7 +152,7 @@ int main(void)
 
       HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
 
-      HAL_Delay (200);   // wait for 200 ms
+      HAL_Delay (1000);   // wait for 200 ms
 #else
       sprintf((char *)spi_buf, "RX"); // junk data
       sprintf((char *)spi_out, "ABCDE"); // junk data
@@ -166,7 +163,8 @@ int main(void)
       HAL_SPI_TransmitReceive(&hspi1, (uint8_t *) spi_out,  (uint8_t *) spi_buf, 4, HAL_MAX_DELAY);
 
 // these should be coming in slow enough to print at this time (4/sec)
-          sprintf((char *)uart_out, ">%d: %02X %02X %02X %02X.\r\n", line_ct++,
+          sprintf((char *)uart_out,
+            ">%d: %02X %02X %02X %02X.\r\n", line_ct++,
                 spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3]   );
           HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
 
