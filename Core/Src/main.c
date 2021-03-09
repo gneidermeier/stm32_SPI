@@ -157,14 +157,15 @@ int main(void)
       sprintf((char *)spi_buf, "RX"); // junk data
       sprintf((char *)spi_out, "ABCDE"); // junk data
 
-      n = (n >= 0x30 && n < 126) ? n+1 : 0x30;
+      n = (n < 126) ? n+1 : 0x30;
       spi_out[3] = n;
 
       HAL_SPI_TransmitReceive(&hspi1, (uint8_t *) spi_out,  (uint8_t *) spi_buf, 4, HAL_MAX_DELAY);
 
 // these should be coming in slow enough to print at this time (4/sec)
           sprintf((char *)uart_out,
-            ">%d: %02X %02X %02X %02X.\r\n", line_ct++,
+            ">%d: %02X %02X %02X %02X.\r\n",
+              n++,
                 spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3]   );
           HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
 
