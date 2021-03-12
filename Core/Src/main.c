@@ -64,6 +64,16 @@ static void MX_SPI1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+#define SPI_CTRLR
+
+#define MCP_SPI_1 1
+//#define MCP_SPI_3
+
+#ifdef MCP_SPI_1
+  #define SPI_SS_PORT  GPIOB
+  #define SPI_SS_PIN   GPIO_PIN_6
+#endif
+
 // copy n paste code to test ...
 // https://controllerstech.com/how-to-use-spi-with-stm32/
 
@@ -72,23 +82,22 @@ void mcp8_write (uint8_t address, uint8_t value)
     uint8_t data[2];
     data[0] = address|0x40;  // multibyte write enabled
     data[1] = value;
-    HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_RESET); // pull the cs pin low to enable the slave
+    HAL_GPIO_WritePin (SPI_SS_PORT, SPI_SS_PIN, GPIO_PIN_RESET); // pull the cs pin low to enable the slave
     HAL_SPI_Transmit (&hspi1, data, 2, 100);  // transmit the address and data
-    HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_SET); // pull the cs pin high to disable the slave
+    HAL_GPIO_WritePin (SPI_SS_PORT, SPI_SS_PIN, GPIO_PIN_SET); // pull the cs pin high to disable the slave
 }
 
 void mcp8_read(uint8_t address, uint8_t nbr, uint8_t *bufr)
 {
     address |= 0x80;  // read operation
     address |= 0x40;  // multibyte read
-    HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);  // pull the cs pin low to enable the slave
+    HAL_GPIO_WritePin (SPI_SS_PORT, SPI_SS_PIN, GPIO_PIN_RESET);  // pull the cs pin low to enable the slave
     HAL_SPI_Transmit (&hspi1, &address, 1, 100);  // send the address from where you want to read data
     HAL_SPI_Receive (&hspi1, bufr, nbr, 100);  // read n BYTES of data
-    HAL_GPIO_WritePin (GPIOB, GPIO_PIN_6, GPIO_PIN_SET);  // pull the cs pin high to disable the slave
+    HAL_GPIO_WritePin (SPI_SS_PORT, SPI_SS_PIN, GPIO_PIN_SET);  // pull the cs pin high to disable the slave
 }
 
 
-#define SPI_CTRLR
 
 /* USER CODE END 0 */
 
@@ -100,7 +109,6 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
     char uart_out[128] = { '\0' };
-    uint8_t spi_out[16] = "BLAH";
     char spi_buf[16];
 
   /* USER CODE END 1 */
@@ -129,7 +137,7 @@ int main(void)
 
 #ifdef SPI_CTRLR
     // CS pin should default high
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(SPI_SS_PORT, SPI_SS_PIN, GPIO_PIN_SET);
 #endif
   /* USER CODE END 2 */
 
@@ -143,31 +151,34 @@ int main(void)
       static int n = 0;
 #ifdef SPI_CTRLR
       sprintf(spi_buf, "abcdefghijklmno"); // junk data for checking if response from peripheral
-      mcp8_read(0x32, 4, spi_buf);
+      mcp8_read(0x32, 4, (uint8_t *)spi_buf);
+      n = (n < 126) ? n+1 : 0x30;
 
       sprintf(uart_out,
               "%d: %02X %02X %02X %02X %02X %02X.\r\n",
-              n++,
+              n,
               spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3], spi_buf[4], spi_buf[5] );
 
-      HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
+      HAL_UART_Transmit(&huart2, (uint8_t *)uart_out, sizeof(uart_out), 100);
 
-      HAL_Delay (1000);   // wait for 200 ms
+      HAL_Delay (100);   // wait for 100 ms
 #else
+      uint8_t spi_out[16] = { '\0' };
+
       sprintf((char *)spi_buf, "RX"); // junk data
       sprintf((char *)spi_out, "ABCDE"); // junk data
 
       n = (n < 126) ? n+1 : 0x30;
       spi_out[3] = n;
 
-      HAL_SPI_TransmitReceive(&hspi1, (uint8_t *) spi_out,  (uint8_t *) spi_buf, 4, HAL_MAX_DELAY);
+      HAL_SPI_TransmitReceive(&hspi1, (uint8_t *)spi_out,  (uint8_t *)spi_buf, 4, HAL_MAX_DELAY);
 
 // these should be coming in slow enough to print at this time (4/sec)
-          sprintf((char *)uart_out,
+          sprintf( uart_out,
             ">%d: %02X %02X %02X %02X.\r\n",
-              n++,
-                spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3]   );
-          HAL_UART_Transmit(&huart2, uart_out, sizeof(uart_out), 100);
+              n,
+                spi_buf[0], spi_buf[1], spi_buf[2], spi_buf[3]);
+          HAL_UART_Transmit(&huart2, (uint8_t *)uart_out, sizeof(uart_out), 100);
 
 #endif
   }
@@ -242,7 +253,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
